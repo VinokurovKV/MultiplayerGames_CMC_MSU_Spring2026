@@ -14,10 +14,9 @@ WINDOW_HEIGHT = 720
 WINDOW_TITLE = "Multiplayer Games CMC 2026"
 
 MENU_ACTIONS = [
-    ("servers", "ДОСТУПНЫЕ СЕРВЕРЫ"),
-    ("games", "ИГРЫ"),
     ("create_lobby", "СОЗДАТЬ ЛОББИ"),
-    ("connect_lobby", "ПОДКЛЮЧИТЬСЯ К ЛОББИ"),
+    ("lobbies", "ДОСТУПНЫЕ ЛОББИ"),
+    ("games", "ИГРЫ"),
     ("exit", "ВЫХОД"),
 ]
 
@@ -25,6 +24,38 @@ CYAN = (58, 226, 255)
 PURPLE = (174, 92, 255)
 BG_TOP = (7, 10, 20)
 BG_BOTTOM = (9, 24, 50)
+
+
+def enter_soft_fullscreen(window: arcade.Window) -> None:
+    """Растягивает окно на весь экран без системного fullscreen-переключения."""
+    screen = window.get_window_screen()
+    window.set_size(screen.width, screen.height)
+    window.set_location(screen.x, screen.y)
+    setattr(window, "_soft_fullscreen", True)
+
+
+def exit_soft_fullscreen(window: arcade.Window) -> None:
+    """Возвращает окно к исходному размеру после soft fullscreen."""
+    windowed_size = getattr(window, "_windowed_size", (WINDOW_WIDTH, WINDOW_HEIGHT))
+    width, height = windowed_size
+    screen = window.get_window_screen()
+    window.set_size(width, height)
+    window.set_location(
+        screen.x + (screen.width - width) // 2,
+        screen.y + (screen.height - height) // 2,
+    )
+    setattr(window, "_soft_fullscreen", False)
+
+
+def is_window_full_like(window: arcade.Window) -> bool:
+    """Проверяет, занимает ли окно почти весь экран (или в fullscreen)."""
+    if window.fullscreen:
+        return True
+
+    win_w, win_h = window.get_size()
+    screen = window.get_window_screen()
+    tolerance = 2
+    return abs(win_w - screen.width) <= tolerance and abs(win_h - screen.height) <= tolerance
 
 
 def build_menu_button_style(exit_button: bool = False) -> dict:
@@ -136,7 +167,17 @@ class NeonBaseView(arcade.View):
 
     def on_key_press(self, key: int, _modifiers: int) -> None:
         if key == arcade.key.ESCAPE:
-            arcade.exit()
+            if not self.window:
+                return
+
+            if self.window.fullscreen:
+                self.window.set_fullscreen(False)
+                setattr(self.window, "_soft_fullscreen", False)
+                return
+
+            if getattr(self.window, "_soft_fullscreen", False) or is_window_full_like(self.window):
+                exit_soft_fullscreen(self.window)
+            return
 
     def _add_centered_widget(self, widget, align_y: float = 0) -> None:
         anchor_widget_cls = getattr(arcade.gui, "UIAnchorWidget", None)
@@ -516,28 +557,6 @@ class MainMenuView(NeonBaseView):
             anchor_x="center",
             anchor_y="center",
         )
-        self.player_label = arcade.Text(
-            player_name,
-            x=0,
-            y=0,
-            color=(230, 241, 255),
-            font_size=22,
-            font_name=("Bahnschrift", "Calibri", "Arial"),
-            anchor_x="center",
-            anchor_y="center",
-            bold=True,
-        )
-        self.network_label = arcade.Text(
-            "РЕГИОН: ЕВРОПА     42 MS",
-            x=0,
-            y=0,
-            color=(154, 220, 255),
-            font_size=20,
-            font_name=("Bahnschrift", "Calibri", "Arial"),
-            anchor_x="left",
-            anchor_y="center",
-        )
-
         self._build_ui()
 
     def _build_ui(self) -> None:
@@ -562,7 +581,6 @@ class MainMenuView(NeonBaseView):
         self.clear()
         self._draw_neon_background()
         self._draw_menu_shell()
-        self._draw_side_panels()
         self._draw_text_layer()
         self.ui.draw()
 
@@ -582,34 +600,6 @@ class MainMenuView(NeonBaseView):
             (66, 188, 255, 65),
             border_width=2,
         )
-
-    def _draw_side_panels(self) -> None:
-        width = self.window.width
-        height = self.window.height
-
-        left = 18
-        right = 318
-        bottom = height - 108
-        top = height - 18
-        self._draw_filled_rect(left, right, bottom, top, (5, 20, 46, 190))
-        self._draw_outlined_rect(
-            left, right, bottom, top, (57, 192, 255, 180), border_width=2)
-
-        self.player_label.text = self.player_name
-        self.player_label.x = (left + right) / 2
-        self.player_label.y = (bottom + top) / 2
-        self.player_label.draw()
-
-        net_l = width - 372
-        net_r = width - 18
-        net_b = 18
-        net_t = 74
-        self._draw_filled_rect(net_l, net_r, net_b, net_t, (4, 18, 46, 205))
-        self._draw_outlined_rect(
-            net_l, net_r, net_b, net_t, (70, 202, 255, 175), border_width=2)
-        self.network_label.x = net_l + 16
-        self.network_label.y = (net_b + net_t) / 2
-        self.network_label.draw()
 
     def _draw_text_layer(self) -> None:
         self.title_label.x = self.window.width / 2
@@ -636,8 +626,11 @@ def run() -> None:
         width=WINDOW_WIDTH,
         height=WINDOW_HEIGHT,
         title=WINDOW_TITLE,
+        fullscreen=False,
         resizable=True,
     )
+    setattr(window, "_windowed_size", (WINDOW_WIDTH, WINDOW_HEIGHT))
+    enter_soft_fullscreen(window)
     window.show_view(RegistrationView())
     arcade.run()
 
