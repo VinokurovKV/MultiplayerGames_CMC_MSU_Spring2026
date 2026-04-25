@@ -109,10 +109,14 @@ def build_primary_button_style() -> dict:
 def build_input_style() -> dict:
     return {
         "normal": UIInputTextStyle(bg=(8, 16, 42, 220), border=CYAN, border_width=2),
-        "hover": UIInputTextStyle(bg=(10, 20, 56, 230), border=(122, 234, 255), border_width=2),
-        "press": UIInputTextStyle(bg=(12, 25, 63, 240), border=(144, 241, 255), border_width=2),
-        "disabled": UIInputTextStyle(bg=(34, 38, 56, 200), border=(102, 116, 142), border_width=2),
-        "invalid": UIInputTextStyle(bg=(72, 19, 47, 210), border=(250, 118, 184), border_width=2),
+        "hover": UIInputTextStyle(bg=(10, 20, 56, 230),
+                                  border=(122, 234, 255), border_width=2),
+        "press": UIInputTextStyle(bg=(12, 25, 63, 240),
+                                  border=(144, 241, 255), border_width=2),
+        "disabled": UIInputTextStyle(bg=(34, 38, 56, 200),
+                                     border=(102, 116, 142), border_width=2),
+        "invalid": UIInputTextStyle(bg=(72, 19, 47, 210),
+                                    border=(250, 118, 184), border_width=2),
     }
 
 
@@ -157,7 +161,8 @@ class NeonBaseView(arcade.View):
         self.ui.add(anchor_layout)
 
     def _draw_neon_background(self) -> None:
-        self._draw_vertical_gradient(top_color=BG_TOP, bottom_color=BG_BOTTOM, steps=60)
+        self._draw_vertical_gradient(
+            top_color=BG_TOP, bottom_color=BG_BOTTOM, steps=60)
         self._draw_stars()
         self._draw_grid_perspective()
         self._draw_center_backlight()
@@ -208,14 +213,16 @@ class NeonBaseView(arcade.View):
         for i in range(-10, 11):
             x_bottom = center_x + i * (width / 16)
             x_top = center_x + i * 34
-            arcade.draw_line(x_bottom, 0, x_top, horizon_y, (38, 123, 210, 40), line_width=1)
+            arcade.draw_line(x_bottom, 0, x_top, horizon_y,
+                             (38, 123, 210, 40), line_width=1)
 
         rows = 16
         for i in range(rows):
             t = i / max(rows - 1, 1)
             y = horizon_y + (t * t) * (height * 0.45)
             alpha = int(16 + 42 * (1 - t))
-            arcade.draw_line(0, y, width, y, (57, 135, 223, alpha), line_width=1)
+            arcade.draw_line(
+                0, y, width, y, (57, 135, 223, alpha), line_width=1)
 
     def _draw_center_backlight(self) -> None:
         width = self.window.width
@@ -236,7 +243,8 @@ class NeonBaseView(arcade.View):
             border_width=2,
         )
 
-    def _draw_filled_rect(self, left: float, right: float, bottom: float, top: float, color) -> None:
+    def _draw_filled_rect(self, left: float, right: float,
+                          bottom: float, top: float, color) -> None:
         if hasattr(arcade, "draw_lrbt_rectangle_filled"):
             arcade.draw_lrbt_rectangle_filled(left, right, bottom, top, color)
             return
@@ -246,7 +254,8 @@ class NeonBaseView(arcade.View):
             return
 
         if hasattr(arcade, "draw_lbwh_rectangle_filled"):
-            arcade.draw_lbwh_rectangle_filled(left, bottom, right - left, top - bottom, color)
+            arcade.draw_lbwh_rectangle_filled(
+                left, bottom, right - left, top - bottom, color)
 
     def _draw_outlined_rect(
         self,
@@ -258,15 +267,18 @@ class NeonBaseView(arcade.View):
         border_width: float = 1,
     ) -> None:
         if hasattr(arcade, "draw_lrbt_rectangle_outline"):
-            arcade.draw_lrbt_rectangle_outline(left, right, bottom, top, color, border_width)
+            arcade.draw_lrbt_rectangle_outline(
+                left, right, bottom, top, color, border_width)
             return
 
         if hasattr(arcade, "draw_lrtb_rectangle_outline"):
-            arcade.draw_lrtb_rectangle_outline(left, right, top, bottom, color, border_width)
+            arcade.draw_lrtb_rectangle_outline(
+                left, right, top, bottom, color, border_width)
             return
 
         if hasattr(arcade, "draw_lbwh_rectangle_outline"):
-            arcade.draw_lbwh_rectangle_outline(left, bottom, right - left, top - bottom, color, border_width)
+            arcade.draw_lbwh_rectangle_outline(
+                left, bottom, right - left, top - bottom, color, border_width)
 
     @staticmethod
     def _generate_stars(count: int) -> list[tuple[float, float, float, int]]:
@@ -409,9 +421,13 @@ class RegistrationView(NeonBaseView):
     def _draw_registration_shell(self) -> None:
         width = self.window.width
         height = self.window.height
-        self._draw_filled_rect(width * 0.20, width * 0.80, height * 0.18, height * 0.78, (5, 12, 30, 120))
-        self._draw_outlined_rect(width * 0.20, width * 0.80, height * 0.18, height * 0.78, (66, 188, 255, 90), 2)
-        self._draw_filled_rect(width * 0.25, width * 0.75, height * 0.60, height * 0.66, (20, 52, 110, 80))
+        self._draw_filled_rect(width * 0.20, width * 0.80,
+                               height * 0.18, height * 0.78, (5, 12, 30, 120))
+        self._draw_outlined_rect(
+            width * 0.20, width * 0.80, height * 0.18,
+            height * 0.78, (66, 188, 255, 90), 2)
+        self._draw_filled_rect(width * 0.25, width * 0.75,
+                               height * 0.60, height * 0.66, (20, 52, 110, 80))
 
     def _draw_text_layer(self) -> None:
         self.title_label.x = self.window.width / 2
@@ -472,7 +488,8 @@ class RegistrationView(NeonBaseView):
 class MainMenuView(NeonBaseView):
     """Главный экран меню проекта."""
 
-    def __init__(self, player_name: str, on_action: Optional[Callable[[str], None]] = None):
+    def __init__(self, player_name: str,
+                 on_action: Optional[Callable[[str], None]] = None):
         super().__init__()
         self.player_name = player_name
         self.on_action = on_action
@@ -575,7 +592,8 @@ class MainMenuView(NeonBaseView):
         bottom = height - 108
         top = height - 18
         self._draw_filled_rect(left, right, bottom, top, (5, 20, 46, 190))
-        self._draw_outlined_rect(left, right, bottom, top, (57, 192, 255, 180), border_width=2)
+        self._draw_outlined_rect(
+            left, right, bottom, top, (57, 192, 255, 180), border_width=2)
 
         self.player_label.text = self.player_name
         self.player_label.x = (left + right) / 2
@@ -587,7 +605,8 @@ class MainMenuView(NeonBaseView):
         net_b = 18
         net_t = 74
         self._draw_filled_rect(net_l, net_r, net_b, net_t, (4, 18, 46, 205))
-        self._draw_outlined_rect(net_l, net_r, net_b, net_t, (70, 202, 255, 175), border_width=2)
+        self._draw_outlined_rect(
+            net_l, net_r, net_b, net_t, (70, 202, 255, 175), border_width=2)
         self.network_label.x = net_l + 16
         self.network_label.y = (net_b + net_t) / 2
         self.network_label.draw()

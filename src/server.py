@@ -145,9 +145,9 @@ class Server:
 
             game_name = args[1]
 
-
             if game_name not in self.available_games:
-                return f"Unknown game. Available games: {', '.join(self.available_games)}"
+                return f"Unknown game. Available games: \
+                        {', '.join(self.available_games)}"
 
             self.connect_to_game(nickname, game_name)
 
