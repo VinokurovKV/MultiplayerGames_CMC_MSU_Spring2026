@@ -1,7 +1,3 @@
-_ERROR_ = ("ПОТЕРЯ СОЕДИНЕНИЯ", ...)
-_STATUS_ = ("СОЗДАТЬ ЛОББИ С ИГРОЙ 1", ...)
-
-
 class Menager():
     """Класс связывающий фронт- и бэк-енд части локальной программы.
 
@@ -41,7 +37,7 @@ class Menager():
     # для всякого рода ввода "введите ник" возвращать нужно tuple (int, str),
     # где int из _STATUS_
 
-    def push_messange(self, messange: object):
+    def push_message(self, messange: object):
         """Функция для отправки фронтенд частью команд управления
 
         Args:
@@ -51,7 +47,7 @@ class Menager():
         """
         self.queue_messange.append(messange)
 
-    def pop_messange(self, ):
+    def pop_message(self, ):
         """Функция для получения бэкенд частью команд управления игрой/меню
 
         Returns:
