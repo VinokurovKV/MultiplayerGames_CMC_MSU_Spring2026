@@ -281,6 +281,17 @@ class TicTacToeView(NeonBaseView):
             color=PURPLE,
         )
 
+        if self.lobby_id is not None:
+            self._draw_player_panel(
+                left=24,
+                right=330,
+                bottom=24,
+                top=80,
+                caption="ID ЛОББИ",
+                value=str(self.lobby_id),
+                color=CYAN,
+            )
+
     def _draw_player_panel(
         self,
         left: float,
@@ -294,7 +305,7 @@ class TicTacToeView(NeonBaseView):
         self._draw_filled_rect(left, right, bottom, top, (5, 20, 46, 195))
         self._draw_outlined_rect(left, right, bottom, top, color + (185,), 2)
 
-        label = self.left_label if caption == "ИГРОК" else self.right_label
+        label = self.left_label if caption in ("ИГРОК", "ID ЛОББИ") else self.right_label
         label.text = f"{caption}: {value}"
         label.x = (left + right) / 2
         label.y = (bottom + top) / 2
@@ -314,12 +325,6 @@ class TicTacToeView(NeonBaseView):
         self.meta_label.x = self.window.width / 2
         self.meta_label.y = self.window.height * 0.185
         self.meta_label.draw()
-
-        if self.lobby_id is not None:
-            self.lobby_label.text = f"ID ЛОББИ: {self.lobby_id}"
-            self.lobby_label.x = self.window.width - 18
-            self.lobby_label.y = self.window.height - 10
-            self.lobby_label.draw()
 
     def _draw_board(self) -> None:
         left, right, bottom, top, cell_size = self._board_bounds()
