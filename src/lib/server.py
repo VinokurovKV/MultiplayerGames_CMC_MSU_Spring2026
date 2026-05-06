@@ -3,7 +3,10 @@
 import asyncio
 import json
 
-from .main_function_for_server import GAMES
+try:
+    from .main_function_for_server import GAMES
+except ImportError:
+    from main_function_for_server import GAMES
 
 
 SERVER_HOST = "0.0.0.0"
@@ -127,6 +130,7 @@ class Server():
         self.lobby_tasks = {}
         self.free_lobby_ids = set(range(MIN_LOBBY_ID, MAX_LOBBY_ID + 1))
         self.games = GAMES.copy()
+        self.server = None
 
     async def client_connected(self, reader, writer):
         """Обрабатывает подключение клиента.
@@ -659,6 +663,17 @@ class Server():
         self.lobbies.pop(lobby_id, None)
         self.free_lobby_ids.add(lobby_id)
 
+    async def close(self):
+        """Останавливает сервер и все активные лобби."""
+
+        for lobby_id in list(self.lobby_tasks.keys()):
+            self.stop_lobby(lobby_id)
+
+        if self.server is not None:
+            self.server.close()
+            await self.server.wait_closed()
+            self.server = None
+
     async def run(self, host: str = SERVER_HOST, port: int = SERVER_PORT):
         """Запускает сервер.
 
@@ -667,10 +682,15 @@ class Server():
             port (int): порт сервера.
         """
 
-        server = await asyncio.start_server(self.client_connected, host, port)
+        self.server = await asyncio.start_server(
+            self.client_connected, host, port
+        )
 
-        async with server:
-            await server.serve_forever()
+        try:
+            async with self.server:
+                await self.server.serve_forever()
+        finally:
+            await self.close()
 
 
 class Client():
@@ -982,3 +1002,27 @@ class Client():
         if self.writer is not None:
             self.writer.close()
             await self.writer.wait_closed()
+            self.writer = None
+
+
+async def run_with_server(run_callback, *args, **kwargs):
+    """Создаёт сервер, запускает callback и гарантированно закрывает его."""
+
+    server = Server(*args, **kwargs)
+
+    try:
+        return await run_callback(server)
+    finally:
+        await server.close()
+
+
+async def run_with_client(run_callback, *args, **kwargs):
+    """Создаёт клиента, подключает его и гарантированно закрывает."""
+
+    client = Client(*args, **kwargs)
+
+    try:
+        await client.connect()
+        return await run_callback(client)
+    finally:
+        await client.close()

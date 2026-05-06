@@ -11,14 +11,19 @@ LIB_DIR = CURRENT_DIR / "lib"
 if str(LIB_DIR) not in sys.path:
     sys.path.insert(0, str(LIB_DIR))
 
-from server import Server
+from server import run_with_server
+
+
+async def _run_server(server):
+    """Start the server and keep it running until it is stopped."""
+
+    await server.run()
 
 
 async def main():
-    """Start the server and run it until it is stopped."""
+    """Run the server inside a wrapper that always closes it."""
 
-    server = Server()
-    await server.run()
+    await run_with_server(_run_server)
 
 
 if __name__ == "__main__":

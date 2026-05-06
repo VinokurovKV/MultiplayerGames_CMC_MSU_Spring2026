@@ -2,8 +2,12 @@
 
 import asyncio
 
-from .frontend import Manager
-from .server import ClientServerError
+try:
+    from .frontend import Manager
+    from .server import ClientServerError
+except ImportError:
+    from frontend import Manager
+    from server import ClientServerError
 
 
 X_O_EMPTY = ""
