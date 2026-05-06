@@ -848,6 +848,27 @@ class JoinLobbyView(NeonBaseView):
         if hasattr(self.ui, "_set_active_widget"):
             self.ui._set_active_widget(self.lobby_input)
 
+    def on_update(self, _delta_time: float) -> None:
+        while True:
+            status, error = Manager().pop_status()
+
+            if status is None and error is None:
+                return
+
+            if isinstance(status, dict) and status.get("view") == "open_x_o":
+                try:
+                    from .x_o_frontend import TicTacToeView
+                except ImportError:
+                    from x_o_frontend import TicTacToeView
+
+                self.window.show_view(
+                    TicTacToeView(
+                        player_name=self.player_name,
+                        on_back=self.on_back,
+                    )
+                )
+                return
+
     def on_draw(self) -> None:
         self.clear()
         self._draw_neon_background()
@@ -927,15 +948,7 @@ class JoinLobbyView(NeonBaseView):
 
         lobby_id = int(raw_lobby_id)
 
-        try:
-            from .x_o_frontend import TicTacToeView
-        except ImportError:
-            from x_o_frontend import TicTacToeView
-
         Manager().push_message((1, lobby_id))
-        self.window.show_view(
-            TicTacToeView(player_name=self.player_name, on_back=self.on_back)
-        )
 
 
 class MainMenuView(NeonBaseView):
@@ -997,6 +1010,32 @@ class MainMenuView(NeonBaseView):
         self._draw_text_layer()
         self.ui.draw()
 
+    def on_update(self, _delta_time: float) -> None:
+        while True:
+            status, error = Manager().pop_status()
+
+            if status is None and error is None:
+                return
+
+            if isinstance(status, dict) and status.get("view") == "open_x_o":
+                try:
+                    from .x_o_frontend import TicTacToeView
+                except ImportError:
+                    from x_o_frontend import TicTacToeView
+
+                def back_to_menu() -> None:
+                    self.window.show_view(
+                        MainMenuView(self.player_name, self.action_callback)
+                    )
+
+                self.window.show_view(
+                    TicTacToeView(
+                        player_name=self.player_name,
+                        on_back=back_to_menu,
+                    )
+                )
+                return
+
     def _draw_menu_shell(self) -> None:
         self._draw_filled_rect(
             self.window.width * 0.23,
@@ -1031,19 +1070,7 @@ class MainMenuView(NeonBaseView):
             return
 
         if action == "create_lobby":
-            try:
-                from .x_o_frontend import TicTacToeView
-            except ImportError:
-                from x_o_frontend import TicTacToeView
-
             Manager().push_message(("create_game", "X_O"))
-
-            def back_to_menu() -> None:
-                self.window.show_view(MainMenuView(self.player_name, self.action_callback))
-
-            self.window.show_view(
-                TicTacToeView(player_name=self.player_name, on_back=back_to_menu)
-            )
             return
 
         if action == "lobbies":

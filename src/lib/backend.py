@@ -130,13 +130,22 @@ async def _run_client_loop(client: Client):
             case "create_game":
                 if not is_connected:
                     continue
-                game = await client.init_game(message[1])
+                try:
+                    game = await client.init_game(message[1])
+                except ClientServerError:
+                    continue
+                if message[1] == "X_O":
+                    manager.push_status({"view": "open_x_o"})
                 game.set_run(CLIENT_GAMES[message[1]])
 
             case 1:
                 if not is_connected:
                     continue
-                game = await client.connect_game(message[1])
+                try:
+                    game = await client.connect_game(message[1])
+                except ClientServerError:
+                    continue
+                manager.push_status({"view": "open_x_o"})
                 game.set_run(CLIENT_GAMES["X_O"])
 
             case code if 1 < code < len(status_client_support._STATUS_):

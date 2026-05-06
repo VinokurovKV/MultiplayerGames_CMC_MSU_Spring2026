@@ -91,7 +91,7 @@ async def x_o_run(game):
                 manager.push_message(user_message)
                 return
 
-            if user_message == "start":
+            if user_message == "start" and turn is None:
                 await game.push_message({"status": "start"})
 
             move = x_o_parse_move(user_message)
@@ -138,6 +138,9 @@ async def x_o_run(game):
                     return
 
                 case "start":
+                    if turn is not None:
+                        continue
+
                     first = message["message"]
                     second = [nick for nick in game.nicks if nick != first][0]
 
