@@ -571,6 +571,203 @@ class RegistrationView(NeonBaseView):
         self.window.show_view(MainMenuView(player_name=name))
 
 
+class JoinLobbyView(NeonBaseView):
+    """Экран подключения к лобби по id."""
+
+    def __init__(self, player_name: str, on_back: Callable[[], None]):
+        super().__init__()
+        self.player_name = player_name
+        self.on_back = on_back
+        self.error_text = ""
+        self.title_label = arcade.Text(
+            "ПОДКЛЮЧЕНИЕ К ЛОББИ",
+            x=0,
+            y=0,
+            color=(228, 243, 255),
+            font_size=48,
+            font_name=("Bahnschrift", "Calibri", "Arial"),
+            anchor_x="center",
+            anchor_y="center",
+            bold=True,
+        )
+        self.prompt_label = arcade.Text(
+            "ВВЕДИТЕ ID ЛОББИ",
+            x=0,
+            y=0,
+            color=(128, 219, 255),
+            font_size=28,
+            font_name=("Bahnschrift", "Calibri", "Arial"),
+            anchor_x="center",
+            anchor_y="center",
+            bold=True,
+        )
+        self.hint_label = arcade.Text(
+            "Введите число и нажмите Enter",
+            x=0,
+            y=0,
+            color=(165, 188, 214),
+            font_size=18,
+            font_name=("Calibri", "Arial"),
+            anchor_x="center",
+            anchor_y="center",
+        )
+        self.error_label = arcade.Text(
+            "",
+            x=0,
+            y=0,
+            color=(255, 142, 195),
+            font_size=18,
+            font_name=("Calibri", "Arial"),
+            anchor_x="center",
+            anchor_y="center",
+        )
+
+        self._build_ui()
+
+    def _build_ui(self) -> None:
+        form_box = arcade.gui.UIBoxLayout(space_between=16)
+        buttons_box = arcade.gui.UIBoxLayout(vertical=False, space_between=14)
+
+        self.lobby_input = VerticalCenteredInputText(
+            width=560,
+            height=64,
+            text="",
+            font_name=("Bahnschrift", "Calibri", "Arial"),
+            font_size=26,
+            text_color=(236, 247, 255),
+            caret_color=CYAN,
+            border_color=CYAN,
+            border_width=2,
+            style=build_input_style(),
+        )
+
+        @self.lobby_input.event("on_change")
+        def on_change(_event):
+            self.error_text = ""
+
+        connect_button = arcade.gui.UIFlatButton(
+            text="ПОДКЛЮЧИТЬСЯ",
+            width=280,
+            height=78,
+            style=build_primary_button_style(),
+        )
+
+        @connect_button.event("on_click")
+        def on_click(_event):
+            self._submit_lobby_id()
+
+        back_button = arcade.gui.UIFlatButton(
+            text="НАЗАД",
+            width=220,
+            height=78,
+            style=build_menu_button_style(exit_button=True),
+        )
+
+        @back_button.event("on_click")
+        def on_back(_event):
+            self.on_back()
+
+        buttons_box.add(connect_button)
+        buttons_box.add(back_button)
+        form_box.add(self.lobby_input)
+        form_box.add(buttons_box)
+        self._add_centered_widget(form_box, align_y=-20)
+
+    def on_show_view(self) -> None:
+        super().on_show_view()
+        if hasattr(self.ui, "_set_active_widget"):
+            self.ui._set_active_widget(self.lobby_input)
+
+    def on_draw(self) -> None:
+        self.clear()
+        self._draw_neon_background()
+        self._draw_registration_shell()
+        self._draw_text_layer()
+        self.ui.draw()
+        self._draw_input_focus_glow()
+
+    def on_key_press(self, key: int, modifiers: int) -> None:
+        if key in (arcade.key.ENTER, arcade.key.NUM_ENTER):
+            self._submit_lobby_id()
+            return
+        super().on_key_press(key, modifiers)
+
+    def _draw_registration_shell(self) -> None:
+        width = self.window.width
+        height = self.window.height
+        self._draw_filled_rect(width * 0.20, width * 0.80,
+                               height * 0.18, height * 0.78, (5, 12, 30, 120))
+        self._draw_outlined_rect(
+            width * 0.20, width * 0.80, height * 0.18,
+            height * 0.78, (66, 188, 255, 90), 2)
+        self._draw_filled_rect(width * 0.25, width * 0.75,
+                               height * 0.60, height * 0.66, (20, 52, 110, 80))
+
+    def _draw_text_layer(self) -> None:
+        self.title_label.x = self.window.width / 2
+        self.title_label.y = self.window.height * 0.84
+        self.title_label.draw()
+
+        self.prompt_label.x = self.window.width / 2
+        self.prompt_label.y = self.window.height * 0.63
+        self.prompt_label.draw()
+
+        self.hint_label.x = self.window.width / 2
+        self.hint_label.y = self.window.height * 0.22
+        self.hint_label.draw()
+
+        self.error_label.text = self.error_text
+        self.error_label.x = self.window.width / 2
+        self.error_label.y = self.window.height * 0.28
+        self.error_label.draw()
+
+    def _draw_input_focus_glow(self) -> None:
+        if not self.lobby_input.active:
+            return
+
+        pad_outer = 4
+        pad_inner = 1
+        self._draw_outlined_rect(
+            self.lobby_input.left - pad_outer,
+            self.lobby_input.right + pad_outer,
+            self.lobby_input.bottom - pad_outer,
+            self.lobby_input.top + pad_outer,
+            (104, 228, 255, 220),
+            border_width=2,
+        )
+        self._draw_outlined_rect(
+            self.lobby_input.left - pad_inner,
+            self.lobby_input.right + pad_inner,
+            self.lobby_input.bottom - pad_inner,
+            self.lobby_input.top + pad_inner,
+            (157, 241, 255, 165),
+            border_width=1,
+        )
+
+    def _submit_lobby_id(self) -> None:
+        raw_lobby_id = self.lobby_input.text.strip()
+
+        if not raw_lobby_id:
+            self.error_text = "ID лобби не может быть пустым."
+            return
+
+        if not raw_lobby_id.isdigit():
+            self.error_text = "ID лобби должен быть числом."
+            return
+
+        lobby_id = int(raw_lobby_id)
+
+        try:
+            from .x_o_frontend import TicTacToeView
+        except ImportError:
+            from x_o_frontend import TicTacToeView
+
+        Manager().push_message((1, lobby_id))
+        self.window.show_view(
+            TicTacToeView(player_name=self.player_name, on_back=self.on_back)
+        )
+
+
 class MainMenuView(NeonBaseView):
     """Главный экран меню проекта."""
 
@@ -675,6 +872,17 @@ class MainMenuView(NeonBaseView):
 
             self.window.show_view(
                 TicTacToeView(player_name=self.player_name, on_back=back_to_menu)
+            )
+            return
+
+        if action == "lobbies":
+            self.window.show_view(
+                JoinLobbyView(
+                    player_name=self.player_name,
+                    on_back=lambda: self.window.show_view(
+                        MainMenuView(self.player_name, self.action_callback)
+                    ),
+                )
             )
             return
 
