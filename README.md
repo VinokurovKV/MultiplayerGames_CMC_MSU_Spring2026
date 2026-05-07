@@ -34,6 +34,47 @@
 - Морской бой
 - Викторина
 
+## Установка
+
+```bash
+python -m pip install --upgrade pip
+python -m pip install -e ".[dev,docs]"
+```
+
+## Запуск
+
+```bash
+python src/main_server.py
+python src/main_client.py
+```
+
+После установки доступны entry points:
+```bash
+main_server
+main_client
+```
+
+## Автоматизация
+
+```bash
+python scripts/tasks.py lint
+python scripts/tasks.py docs
+python scripts/tasks.py build
+python scripts/tasks.py all
+```
+
+## Сборка wheel
+
+```bash
+python -m build --wheel
+```
+
+## Sphinx-документация
+
+```bash
+python -m sphinx -b html docs docs/_build/html
+```
+
 
 
    
