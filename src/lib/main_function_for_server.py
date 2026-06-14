@@ -272,6 +272,39 @@ async def pong_main_lobby(lobby):
                         start_round()
 
 
+async def snake_main_lobby(lobby):
+    """Логика серверного лобби Snake."""
+
+    while True:
+        nick, message = await lobby.pop_message()
+
+        target = message.get("target")
+        status = message.get("status")
+
+        match target, status:
+            case "main_lobby", "joined":
+                lobby.push_message(
+                    {
+                        "target": "client",
+                        "status": "joined",
+                        "message": nick,
+                    }
+                )
+
+            case "main_lobby", "leave":
+                lobby.push_message(
+                    {
+                        "target": "client",
+                        "status": "leave",
+                        "message": nick,
+                    }
+                )
+                return
+
+            case "client", "start":
+                continue
+
+
 GAMES = {
     "X_O": {
         "main_func": x_o_main_lobby,
@@ -279,6 +312,10 @@ GAMES = {
     },
     "PONG": {
         "main_func": pong_main_lobby,
+        "max_players": 2,
+    },
+    "SNAKE": {
+        "main_func": snake_main_lobby,
         "max_players": 2,
     },
 }

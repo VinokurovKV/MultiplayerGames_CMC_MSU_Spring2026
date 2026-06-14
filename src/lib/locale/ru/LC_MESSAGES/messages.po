@@ -132,6 +132,14 @@ msgstr ""
 "Классический пинг-понг: двигайте ракетку и отбивайте мяч. Очко получает "
 "тот, кто отправил мяч за край соперника."
 
+msgid "game.snake.title"
+msgstr "Snake"
+
+msgid "game.snake.rules"
+msgstr ""
+"Два игрока управляют змейками на отдельных полях. Побеждает игрок с "
+"большим счётом."
+
 msgid "pong.waiting"
 msgstr "Ожидание второго игрока. Игра до 5 очков."
 
@@ -148,6 +156,21 @@ msgid "pong.start"
 msgstr "СТАРТ"
 
 msgid "pong.back"
+msgstr "В МЕНЮ"
+
+msgid "snake.waiting"
+msgstr "Ожидание второго игрока. Шаблон экрана Snake."
+
+msgid "snake.prototype"
+msgstr "Визуальный шаблон Snake. Игровая логика будет добавлена позже."
+
+msgid "snake.leave"
+msgstr "Соперник покинул игру"
+
+msgid "snake.start"
+msgstr "СТАРТ"
+
+msgid "snake.back"
 msgstr "В МЕНЮ"
 
 msgid "game.x_o.title"

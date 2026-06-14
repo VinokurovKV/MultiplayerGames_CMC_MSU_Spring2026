@@ -145,6 +145,8 @@ async def _run_client_loop(client: Client):
                     manager.push_status({"view": "open_x_o"})
                 if message[1] == "PONG":
                     manager.push_status({"view": "open_pong"})
+                if message[1] == "SNAKE":
+                    manager.push_status({"view": "open_snake"})
                 game.set_run(CLIENT_GAMES[message[1]])
 
             case 1:
@@ -156,6 +158,8 @@ async def _run_client_loop(client: Client):
                     continue
                 if game.game_name == "PONG":
                     manager.push_status({"view": "open_pong"})
+                elif game.game_name == "SNAKE":
+                    manager.push_status({"view": "open_snake"})
                 else:
                     manager.push_status({"view": "open_x_o"})
                 game.set_run(CLIENT_GAMES[game.game_name or "X_O"])

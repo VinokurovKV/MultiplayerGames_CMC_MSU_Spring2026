@@ -566,7 +566,79 @@ async def pong_run(game):
             pass
 
 
+def snake_push(manager, game, status):
+    """Отправляет состояние Snake во фронтенд."""
+
+    manager.push_status(
+        {
+            "game": "SNAKE",
+            "nicks": list(game.nicks),
+            "lobby_id": game.get_id(),
+            "status": status,
+        }
+    )
+
+
+async def snake_run(game):
+    """Временная локальная логика Snake без игрового процесса."""
+
+    manager = Manager()
+
+    await game.get_nicks()
+    snake_push(manager, game, "waiting")
+
+    task = asyncio.create_task(game.pop_message())
+
+    try:
+        while True:
+            await asyncio.sleep(0.02)
+
+            user_message = manager.pop_message()
+
+            if (
+                isinstance(user_message, dict)
+                and user_message.get("action") == "leave_game"
+            ):
+                task.cancel()
+                try:
+                    await task
+                except asyncio.CancelledError:
+                    pass
+                await game.leave()
+                return
+
+            if user_message == "start":
+                snake_push(manager, game, "waiting")
+
+            if not task.done():
+                continue
+
+            message = task.result()
+            task = asyncio.create_task(game.pop_message())
+
+            match message.get("status"):
+                case "joined":
+                    status = "joined" if len(game.nicks) >= 2 else "waiting"
+                    snake_push(manager, game, status)
+
+                case "leave":
+                    snake_push(manager, game, "leave")
+                    return
+
+                case "error":
+                    raise ClientServerError(message.get("message"))
+
+    finally:
+        task.cancel()
+
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+
+
 CLIENT_GAMES = {
     "X_O": x_o_run,
     "PONG": pong_run,
+    "SNAKE": snake_run,
 }

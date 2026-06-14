@@ -132,6 +132,14 @@ msgstr ""
 "Classic ping-pong: move your paddle and return the ball. A player scores "
 "when the ball passes the opponent."
 
+msgid "game.snake.title"
+msgstr "Snake"
+
+msgid "game.snake.rules"
+msgstr ""
+"Two players control snakes on separate boards. The player with the higher "
+"score wins."
+
 msgid "pong.waiting"
 msgstr "Waiting for the second player. First to 5 points wins."
 
@@ -148,6 +156,21 @@ msgid "pong.start"
 msgstr "START"
 
 msgid "pong.back"
+msgstr "MENU"
+
+msgid "snake.waiting"
+msgstr "Waiting for the second player. Snake screen prototype."
+
+msgid "snake.prototype"
+msgstr "Snake visual prototype. Gameplay will be added later."
+
+msgid "snake.leave"
+msgstr "Opponent left the game"
+
+msgid "snake.start"
+msgstr "START"
+
+msgid "snake.back"
 msgstr "MENU"
 
 msgid "game.x_o.title"
