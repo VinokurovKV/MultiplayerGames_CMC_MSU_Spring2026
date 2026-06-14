@@ -24,6 +24,8 @@ except ImportError:
 
 WINDOW_WIDTH = 1280
 WINDOW_HEIGHT = 720
+MIN_WINDOW_WIDTH = 800
+MIN_WINDOW_HEIGHT = 600
 WINDOW_TITLE = "Multiplayer Games CMC 2026"
 MIN_LOBBY_ID = 1000
 MAX_LOBBY_ID = 9999
@@ -406,13 +408,14 @@ class NeonBaseView(arcade.View):
                 0, y, width, y, (57, 135, 223, alpha), line_width=1)
 
     def _draw_center_backlight(self) -> None:
+        # центральная плашка за "добро пожаловать"
         width = self.window.width
         height = self.window.height
         self._draw_filled_rect(
-            width * 0.28,
-            width * 0.72,
-            height * 0.80,
-            height * 0.92,
+            width * 0.289,
+            width * 0.71,
+            height * 0.805,
+            height * 0.915,
             (22, 58, 120, 70),
         )
         self._draw_outlined_rect(
@@ -700,6 +703,7 @@ class RegistrationView(NeonBaseView):
     def __init__(self):
         super().__init__()
         self.error_text = ""
+        self._font_layout_state = None
         self.title_label = arcade.Text(
             tr("registration.title"),
             x=0,
@@ -746,7 +750,7 @@ class RegistrationView(NeonBaseView):
         self._build_ui()
 
     def _build_ui(self) -> None:
-        form_box = arcade.gui.UIBoxLayout(space_between=16)
+        self.form_box = arcade.gui.UIBoxLayout(space_between=16)
 
         self.name_input = VerticalCenteredInputText(
             width=560,
@@ -776,9 +780,9 @@ class RegistrationView(NeonBaseView):
         def on_click(_event):
             self._submit_name()
 
-        form_box.add(self.name_input)
-        form_box.add(self.continue_button)
-        self._add_centered_widget(form_box, align_y=-20)
+        self.form_box.add(self.name_input)
+        self.form_box.add(self.continue_button)
+        self._add_centered_widget(self.form_box, align_y=-20)
         self._add_locale_toggle()
 
     def on_show_view(self) -> None:
@@ -814,13 +818,16 @@ class RegistrationView(NeonBaseView):
         self._draw_outlined_rect(
             width * 0.20, width * 0.80, height * 0.18,
             height * 0.78, (66, 188, 255, 90), 2)
-        self._draw_filled_rect(width * 0.25, width * 0.75,
+
+        # плашка за "введите имя"
+        self._draw_filled_rect(width * 0.35, width * 0.65,
                                height * 0.60, height * 0.66, (20, 52, 110, 80))
 
     def _draw_text_layer(self) -> None:
         self._refresh_texts()
+        self._update_responsive_fonts()
         self.title_label.x = self.window.width / 2
-        self.title_label.y = self.window.height * 0.84
+        self.title_label.y = self.window.height * 0.86
         self.title_label.draw()
 
         self.prompt_label.x = self.window.width / 2
@@ -835,6 +842,95 @@ class RegistrationView(NeonBaseView):
         self.error_label.x = self.window.width / 2
         self.error_label.y = self.window.height * 0.28
         self.error_label.draw()
+
+    def _update_responsive_fonts(self) -> None:
+        """Масштабирует надписи при изменении размера окна."""
+
+        scale = min(
+            self.window.width / WINDOW_WIDTH,
+            self.window.height / WINDOW_HEIGHT,
+            1.0,
+        )
+        scale = max(scale, 0.45)
+        layout_state = (
+            scale,
+            self.title_label.text,
+            self.prompt_label.text,
+            self.hint_label.text,
+            self.continue_button.text,
+        )
+
+        if layout_state == self._font_layout_state:
+            return
+
+        self._font_layout_state = layout_state
+        self.title_label.font_size = 52 * scale
+        self.prompt_label.font_size = 28 * scale
+        self.hint_label.font_size = 18 * scale
+        self.error_label.font_size = 18 * scale
+
+        self.name_input.resize(
+            width=max(280, 560 * scale),
+            height=max(38, 64 * scale),
+        )
+        self.continue_button.resize(
+            width=max(180, 360 * scale),
+            height=max(46, 78 * scale),
+        )
+        self.form_box._space_between = max(8, 16 * scale)
+        self.form_box._trigger_size_hint_update()
+
+        self._fit_text_width(
+            self.title_label,
+            available_width=self.window.width * 0.38,
+            min_font_size=18,
+        )
+        self._fit_text_width(
+            self.prompt_label,
+            available_width=self.window.width * 0.27,
+            min_font_size=12,
+        )
+        self._fit_text_width(
+            self.hint_label,
+            available_width=self.window.width * 0.52,
+            min_font_size=10,
+        )
+
+        input_font_size = max(12, 26 * scale)
+        self.name_input.doc.set_style(
+            0,
+            len(self.name_input.text),
+            {"font_size": input_font_size},
+        )
+        self.name_input.caret.set_style({"font_size": input_font_size})
+        self.name_input.trigger_full_render()
+
+        button_font_size = max(12, 24 * scale)
+        self._set_button_font_size(self.continue_button, button_font_size)
+        if self.locale_button is not None:
+            self._set_button_font_size(self.locale_button, button_font_size)
+
+    @staticmethod
+    def _fit_text_width(
+        label: arcade.Text,
+        available_width: float,
+        min_font_size: float,
+    ) -> None:
+        """Уменьшает текст, если он шире доступной области."""
+
+        if label.content_width <= available_width:
+            return
+
+        fitted_size = label.font_size * available_width / label.content_width
+        label.font_size = max(min_font_size, fitted_size)
+
+    @staticmethod
+    def _set_button_font_size(button, font_size: float) -> None:
+        """Обновляет размер текста во всех состояниях кнопки."""
+
+        for style in button.style.values():
+            style.font_size = font_size
+        button.trigger_full_render()
 
     def _refresh_texts(self) -> None:
         super()._refresh_texts()
@@ -1900,6 +1996,7 @@ async def run() -> None:
         fullscreen=False,
         resizable=True,
     )
+    window.set_minimum_size(MIN_WINDOW_WIDTH, MIN_WINDOW_HEIGHT)
     setattr(window, "_windowed_size", (WINDOW_WIDTH, WINDOW_HEIGHT))
     enter_soft_fullscreen(window)
     window.show_view(StartupView())
