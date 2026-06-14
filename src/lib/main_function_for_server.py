@@ -133,6 +133,28 @@ async def pong_main_lobby(lobby):
     """Логика серверного лобби Pong."""
 
     stage = "waiting"
+    round_id = 0
+    pending_start = False
+
+    def start_round():
+        nonlocal pending_start, round_id, stage
+
+        pending_start = False
+        stage = "game"
+        round_id += 1
+        players = lobby.get_list_nicks()
+
+        lobby.push_message(
+            {
+                "target": "client",
+                "status": "start",
+                "message": {
+                    "players": players,
+                    "host": players[0],
+                    "round": round_id,
+                },
+            }
+        )
 
     while True:
         nick, message = await lobby.pop_message()
@@ -173,19 +195,7 @@ async def pong_main_lobby(lobby):
                             )
                             continue
 
-                        stage = "game"
-                        players = lobby.get_list_nicks()
-
-                        lobby.push_message(
-                            {
-                                "target": "client",
-                                "status": "start",
-                                "message": {
-                                    "players": players,
-                                    "host": players[0],
-                                },
-                            }
-                        )
+                        start_round()
 
                     case _:
                         lobby.push_message(
@@ -209,8 +219,57 @@ async def pong_main_lobby(lobby):
                         )
                         return
 
+                    case "client", "round_finished":
+                        if pending_start and len(lobby.get_list_nicks()) >= (
+                            lobby.max_players
+                        ):
+                            start_round()
+                        else:
+                            stage = "finished"
+
+                    case "client", "start":
+                        if len(lobby.get_list_nicks()) < lobby.max_players:
+                            lobby.push_message(
+                                {
+                                    "target": "client",
+                                    "status": "error",
+                                    "message": "not enough players",
+                                },
+                                [nick],
+                            )
+                            continue
+
+                        start_round()
+                        continue
+
                     case "client", _:
                         lobby.push_message(message)
+
+            case "finished":
+                match target, status:
+                    case "main_lobby", "leave":
+                        lobby.push_message(
+                            {
+                                "target": "client",
+                                "status": "leave",
+                                "message": nick,
+                            }
+                        )
+                        return
+
+                    case "client", "start":
+                        if len(lobby.get_list_nicks()) < lobby.max_players:
+                            lobby.push_message(
+                                {
+                                    "target": "client",
+                                    "status": "error",
+                                    "message": "not enough players",
+                                },
+                                [nick],
+                            )
+                            continue
+
+                        start_round()
 
 
 GAMES = {

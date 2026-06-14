@@ -16,6 +16,12 @@ PONG_STATE_INTERVAL = 0.04
 PONG_PADDLE_SIZE = 0.26
 PONG_PADDLE_OFFSET = 0.08
 PONG_BALL_RADIUS = 0.025
+PONG_BALL_SPEED_X = 0.68
+PONG_BALL_SPEED_Y = 0.46
+PONG_BALL_ACCELERATION = 1.07
+PONG_BALL_MAX_SPEED_X = 1.15
+PONG_BALL_MAX_SPEED_Y = 0.82
+PONG_WIN_SCORE = 5
 
 
 def x_o_win(board):
@@ -248,10 +254,11 @@ async def x_o_run(game):
             pass
 
 
-def pong_initial_state(players):
+def pong_initial_state(players, round_id):
     """Возвращает начальное состояние Pong."""
 
     return {
+        "round": round_id,
         "players": players,
         "paddles": {
             players[0]: 0.5,
@@ -260,13 +267,14 @@ def pong_initial_state(players):
         "ball": {
             "x": 0.5,
             "y": 0.5,
-            "vx": 0.46,
-            "vy": 0.34,
+            "vx": PONG_BALL_SPEED_X,
+            "vy": PONG_BALL_SPEED_Y,
         },
         "score": {
             players[0]: 0,
             players[1]: 0,
         },
+        "winner": None,
     }
 
 
@@ -288,8 +296,12 @@ def pong_push(manager, game, state, side, status):
 def pong_process_ball(state, delta_time):
     """Обновляет положение мяча и счёт Pong."""
 
+    if state.get("winner") is not None:
+        return
+
     players = state["players"]
     ball = state["ball"]
+    previous_x = ball["x"]
     ball["x"] += ball["vx"] * delta_time
     ball["y"] += ball["vy"] * delta_time
 
@@ -299,26 +311,62 @@ def pong_process_ball(state, delta_time):
 
     left_y = state["paddles"][players[0]]
     right_y = state["paddles"][players[1]]
+    hit_tolerance = PONG_PADDLE_SIZE / 2 + PONG_BALL_RADIUS * 1.5
+    left_paddle_x = PONG_PADDLE_OFFSET
+    right_paddle_x = 1 - PONG_PADDLE_OFFSET
 
     if (
-        ball["x"] <= PONG_PADDLE_OFFSET
-        and abs(ball["y"] - left_y) <= PONG_PADDLE_SIZE / 2
+        ball["vx"] < 0
+        and previous_x >= left_paddle_x >= ball["x"]
+        and abs(ball["y"] - left_y) <= hit_tolerance
     ):
+        ball["x"] = left_paddle_x
         ball["vx"] = abs(ball["vx"])
+        pong_accelerate_ball(ball)
 
     if (
-        ball["x"] >= 1 - PONG_PADDLE_OFFSET
-        and abs(ball["y"] - right_y) <= PONG_PADDLE_SIZE / 2
+        ball["vx"] > 0
+        and previous_x <= right_paddle_x <= ball["x"]
+        and abs(ball["y"] - right_y) <= hit_tolerance
     ):
+        ball["x"] = right_paddle_x
         ball["vx"] = -abs(ball["vx"])
+        pong_accelerate_ball(ball)
 
     if ball["x"] < 0:
         state["score"][players[1]] += 1
+        if state["score"][players[1]] >= PONG_WIN_SCORE:
+            state["winner"] = players[1]
+            pong_reset_paddles(state)
         pong_reset_ball(ball, direction=1)
 
     if ball["x"] > 1:
         state["score"][players[0]] += 1
+        if state["score"][players[0]] >= PONG_WIN_SCORE:
+            state["winner"] = players[0]
+            pong_reset_paddles(state)
         pong_reset_ball(ball, direction=-1)
+
+
+def pong_accelerate_ball(ball):
+    """Постепенно ускоряет мяч после удара ракеткой."""
+
+    ball["vx"] = pong_speed_with_limit(ball["vx"], PONG_BALL_MAX_SPEED_X)
+    ball["vy"] = pong_speed_with_limit(ball["vy"], PONG_BALL_MAX_SPEED_Y)
+
+
+def pong_speed_with_limit(value, limit):
+    """Возвращает ускоренную скорость с сохранением направления."""
+
+    direction = 1 if value >= 0 else -1
+    return direction * min(abs(value) * PONG_BALL_ACCELERATION, limit)
+
+
+def pong_reset_paddles(state):
+    """Возвращает ракетки в центр поля."""
+
+    for player in state["players"]:
+        state["paddles"][player] = 0.5
 
 
 def pong_reset_ball(ball, direction):
@@ -326,8 +374,9 @@ def pong_reset_ball(ball, direction):
 
     ball["x"] = 0.5
     ball["y"] = 0.5
-    ball["vx"] = 0.46 * direction
-    ball["vy"] *= -1
+    vertical_direction = -1 if ball.get("vy", PONG_BALL_SPEED_Y) > 0 else 1
+    ball["vx"] = PONG_BALL_SPEED_X * direction
+    ball["vy"] = PONG_BALL_SPEED_Y * vertical_direction
 
 
 async def pong_run(game):
@@ -337,7 +386,10 @@ async def pong_run(game):
     state = None
     side = None
     host = None
+    round_id = 0
     last_state_send = 0.0
+    finish_reported = False
+    restart_pending = False
 
     await game.get_nicks()
     pong_push(manager, game, state, side, "waiting")
@@ -351,6 +403,18 @@ async def pong_run(game):
             user_message = manager.pop_message()
 
             if (
+                isinstance(user_message, dict)
+                and user_message.get("action") == "leave_game"
+            ):
+                task.cancel()
+                try:
+                    await task
+                except asyncio.CancelledError:
+                    pass
+                await game.leave()
+                return
+
+            if (
                 isinstance(user_message, tuple)
                 and len(user_message) > 0
                 and user_message[0] == 0
@@ -358,8 +422,20 @@ async def pong_run(game):
                 manager.push_message(user_message)
                 return
 
-            if user_message == "start" and state is None:
-                await game.push_message({"status": "start"})
+            if user_message == "start":
+                restart_pending = True
+                await game.push_message(
+                    {
+                        "status": "start",
+                        "message": {
+                            "round": round_id,
+                            "finished": (
+                                state is not None
+                                and state.get("winner") is not None
+                            ),
+                        },
+                    }
+                )
 
             if (
                 isinstance(user_message, dict)
@@ -370,13 +446,18 @@ async def pong_run(game):
                     {
                         "status": "paddle",
                         "message": {
-                            "nick": game.client.nick,
+                            "round": user_message.get("round", round_id),
+                            "side": user_message.get("side"),
                             "position": user_message.get("position"),
                         },
                     }
                 )
 
-            if state is not None and game.client.nick == host:
+            if (
+                state is not None
+                and game.client.nick == host
+                and state.get("winner") is None
+            ):
                 pong_process_ball(state, PONG_TICK)
                 last_state_send += PONG_TICK
 
@@ -389,6 +470,23 @@ async def pong_run(game):
                     )
                     last_state_send = 0.0
                     pong_push(manager, game, state, side, "move")
+
+            if (
+                state is not None
+                and state.get("winner") is not None
+                and not finish_reported
+            ):
+                if game.client.nick == host:
+                    await game.push_message(
+                        {
+                            "status": "state",
+                            "message": state,
+                        }
+                    )
+                    await game.push_message({"status": "round_finished"})
+
+                pong_push(manager, game, state, side, "finished")
+                finish_reported = True
 
             if not task.done():
                 continue
@@ -406,10 +504,18 @@ async def pong_run(game):
 
                 case "start":
                     data = message["message"]
+                    new_round_id = data.get("round", round_id + 1)
+                    if new_round_id < round_id:
+                        continue
+
+                    round_id = new_round_id
                     players = data["players"]
                     host = data["host"]
                     side = "left" if game.client.nick == players[0] else "right"
-                    state = pong_initial_state(players)
+                    state = pong_initial_state(players, round_id)
+                    last_state_send = 0.0
+                    finish_reported = False
+                    restart_pending = False
                     pong_push(manager, game, state, side, "start")
 
                 case "paddle":
@@ -417,16 +523,36 @@ async def pong_run(game):
                         continue
 
                     data = message["message"]
-                    nick = data.get("nick")
+                    message_round = data.get("round")
+                    if message_round is not None and message_round != round_id:
+                        continue
+
+                    side_name = data.get("side")
                     position = data.get("position")
+
+                    if side_name == "left":
+                        nick = state["players"][0]
+                    elif side_name == "right":
+                        nick = state["players"][1]
+                    else:
+                        nick = data.get("nick")
 
                     if nick in state["paddles"] and isinstance(position, float):
                         state["paddles"][nick] = min(max(position, 0.13), 0.87)
                         pong_push(manager, game, state, side, "move")
 
                 case "state":
+                    message_round = message["message"].get("round")
+                    if message_round is not None and message_round < round_id:
+                        continue
+
+                    if restart_pending and message["message"].get("winner"):
+                        continue
+
                     state = message["message"]
-                    pong_push(manager, game, state, side, "move")
+                    round_id = state.get("round", round_id)
+                    status = "finished" if state.get("winner") else "move"
+                    pong_push(manager, game, state, side, status)
 
                 case "error":
                     raise ClientServerError(message.get("message"))

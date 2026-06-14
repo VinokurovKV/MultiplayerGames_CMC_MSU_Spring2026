@@ -133,10 +133,13 @@ msgstr ""
 "when the ball passes the opponent."
 
 msgid "pong.waiting"
-msgstr "Waiting for the second player. Press START when both players joined."
+msgstr "Waiting for the second player. First to 5 points wins."
 
 msgid "pong.playing"
-msgstr "Game is running. Controls: W/S or arrow up/down."
+msgstr "Left paddle: W/S. Right paddle: arrow up/down."
+
+msgid "pong.finished"
+msgstr "{winner} won. Press START for a new match."
 
 msgid "pong.leave"
 msgstr "Opponent left the game"

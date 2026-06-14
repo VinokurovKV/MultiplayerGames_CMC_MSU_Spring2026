@@ -33,6 +33,9 @@ PADDLE_H_RATIO = 0.26
 PADDLE_W = 16
 BALL_R = 12
 PADDLE_SPEED = 0.85
+PADDLE_SEND_INTERVAL = 0.02
+LOCAL_PADDLE_HOLD_TIME = 0.15
+STATE_SMOOTHING = 12.0
 
 
 class PongView(NeonBaseView):
@@ -45,13 +48,28 @@ class PongView(NeonBaseView):
         self.manager = Manager()
 
         self.state = None
+        self.display_state = None
         self.nicks: list[str] = []
         self.lobby_id: int | None = None
         self.side: str | None = None
         self.status = "waiting"
         self.error_text = ""
-        self.local_paddle = 0.5
-        self.move_direction = 0
+        self.local_paddles = {
+            "left": 0.5,
+            "right": 0.5,
+        }
+        self.move_directions = {
+            "left": 0,
+            "right": 0,
+        }
+        self.paddle_send_timers = {
+            "left": 0.0,
+            "right": 0.0,
+        }
+        self.local_hold_timers = {
+            "left": 0.0,
+            "right": 0.0,
+        }
 
         self.title_label = arcade.Text(
             "PONG",
@@ -111,6 +129,7 @@ class PongView(NeonBaseView):
 
         @self.start_button.event("on_click")
         def on_start(_event):
+            self._preview_restart()
             self.manager.push_message("start")
             self.status = "waiting"
 
@@ -123,6 +142,7 @@ class PongView(NeonBaseView):
 
         @self.back_button.event("on_click")
         def on_back(_event):
+            self.manager.push_message({"action": "leave_game"})
             self.on_back()
 
         controls.add(self.start_button)
@@ -135,6 +155,7 @@ class PongView(NeonBaseView):
 
         self._consume_statuses()
         self._update_local_paddle(delta_time)
+        self._smooth_display_state(delta_time)
 
     def on_draw(self) -> None:
         """Отрисовывает экран Pong."""
@@ -149,12 +170,20 @@ class PongView(NeonBaseView):
     def on_key_press(self, key: int, modifiers: int) -> None:
         """Обрабатывает клавиши движения ракетки."""
 
-        if key in (arcade.key.W, arcade.key.UP):
-            self.move_direction = 1
+        if key == arcade.key.W:
+            self.move_directions["left"] = 1
             return
 
-        if key in (arcade.key.S, arcade.key.DOWN):
-            self.move_direction = -1
+        if key == arcade.key.S:
+            self.move_directions["left"] = -1
+            return
+
+        if key == arcade.key.UP:
+            self.move_directions["right"] = 1
+            return
+
+        if key == arcade.key.DOWN:
+            self.move_directions["right"] = -1
             return
 
         super().on_key_press(key, modifiers)
@@ -162,8 +191,23 @@ class PongView(NeonBaseView):
     def on_key_release(self, key: int, _modifiers: int) -> None:
         """Останавливает движение ракетки при отпускании клавиш."""
 
-        if key in (arcade.key.W, arcade.key.UP, arcade.key.S, arcade.key.DOWN):
-            self.move_direction = 0
+        if key in (arcade.key.W, arcade.key.S):
+            self.move_directions["left"] = 0
+            self.local_hold_timers["left"] = LOCAL_PADDLE_HOLD_TIME
+            self._apply_local_paddle("left")
+            self._send_paddle_position("left")
+
+        if key in (arcade.key.UP, arcade.key.DOWN):
+            self.move_directions["right"] = 0
+            self.local_hold_timers["right"] = LOCAL_PADDLE_HOLD_TIME
+            self._apply_local_paddle("right")
+            self._send_paddle_position("right")
+
+    def on_hide_view(self) -> None:
+        """Сбрасывает ввод при уходе с экрана или потере активной игры."""
+
+        self._reset_local_input()
+        super().on_hide_view()
 
     def _consume_statuses(self) -> None:
         latest_status = None
@@ -194,22 +238,203 @@ class PongView(NeonBaseView):
         self.status = latest_status.get("status", self.status)
         self.error_text = ""
 
-        if self.state and self.player_name in self.state["paddles"]:
-            self.local_paddle = self.state["paddles"][self.player_name]
+        if self.state is not None and self.status in ("start", "finished"):
+            self._reset_local_input()
+            self.display_state = self._copy_state(self.state)
+            self._sync_local_paddles()
+        elif self.display_state is None and self.state is not None:
+            self.display_state = self._copy_state(self.state)
+            self._sync_local_paddles()
+        elif self.state is not None:
+            self._sync_idle_local_paddles()
 
     def _update_local_paddle(self, delta_time: float) -> None:
-        if self.side is None or self.move_direction == 0:
+        self._update_local_hold(delta_time)
+
+        if self.state is None:
             return
 
-        self.local_paddle += self.move_direction * PADDLE_SPEED * delta_time
-        self.local_paddle = min(max(self.local_paddle, 0.13), 0.87)
+        if self.state.get("winner") is not None:
+            return
+
+        for side_name, direction in self.move_directions.items():
+            if direction == 0:
+                self.paddle_send_timers[side_name] = PADDLE_SEND_INTERVAL
+                continue
+
+            self.local_paddles[side_name] += direction * PADDLE_SPEED * delta_time
+            self.local_paddles[side_name] = min(
+                max(self.local_paddles[side_name], 0.13),
+                0.87,
+            )
+            self._apply_local_paddle(side_name)
+
+            self.paddle_send_timers[side_name] += delta_time
+            if self.paddle_send_timers[side_name] < PADDLE_SEND_INTERVAL:
+                continue
+
+            self.paddle_send_timers[side_name] = 0.0
+            self._send_paddle_position(side_name)
+
+    def _update_local_hold(self, delta_time: float) -> None:
+        for side_name, time_left in self.local_hold_timers.items():
+            if time_left <= 0.0:
+                continue
+
+            self.local_hold_timers[side_name] = max(0.0, time_left - delta_time)
+
+    def _send_paddle_position(self, side_name: str) -> None:
         self.manager.push_message(
             {
                 "game": "PONG",
                 "action": "paddle",
-                "position": float(self.local_paddle),
+                "round": self.state.get("round") if self.state else None,
+                "side": side_name,
+                "position": float(self.local_paddles[side_name]),
             }
         )
+
+    def _apply_local_paddle(self, side_name: str) -> None:
+        nick = self._side_nick(side_name)
+        if self.state is None or nick is None:
+            return
+
+        self.state["paddles"][nick] = self.local_paddles[side_name]
+        if self.display_state is not None:
+            self.display_state["paddles"][nick] = self.local_paddles[side_name]
+
+    def _sync_local_paddles(self) -> None:
+        if self.state is None:
+            return
+
+        for side_name in ("left", "right"):
+            nick = self._side_nick(side_name)
+            if nick in self.state["paddles"]:
+                self.local_paddles[side_name] = self.state["paddles"][nick]
+
+    def _sync_idle_local_paddles(self) -> None:
+        if self.state is None:
+            return
+
+        for side_name in ("left", "right"):
+            if self.move_directions[side_name] != 0:
+                continue
+
+            if self.local_hold_timers[side_name] > 0.0:
+                continue
+
+            nick = self._side_nick(side_name)
+            if nick in self.state["paddles"]:
+                self.local_paddles[side_name] = self.state["paddles"][nick]
+
+    def _smooth_display_state(self, delta_time: float) -> None:
+        if self.state is None:
+            return
+
+        if self.display_state is None:
+            self.display_state = self._copy_state(self.state)
+            return
+
+        amount = min(1.0, STATE_SMOOTHING * delta_time)
+        for nick, position in self.state["paddles"].items():
+            side_name = self._nick_side(nick)
+            if side_name is not None and self._uses_local_paddle(side_name):
+                self.display_state["paddles"][nick] = self.local_paddles[side_name]
+                continue
+
+            current = self.display_state["paddles"].get(nick, position)
+            self.display_state["paddles"][nick] = self._lerp(
+                current, position, amount
+            )
+
+        for axis in ("x", "y"):
+            current = self.display_state["ball"][axis]
+            target = self.state["ball"][axis]
+            self.display_state["ball"][axis] = self._lerp(current, target, amount)
+
+        self.display_state["score"] = self.state["score"].copy()
+        self.display_state["winner"] = self.state.get("winner")
+
+    def _uses_local_paddle(self, side_name: str) -> bool:
+        if self.state is not None and self.state.get("winner") is not None:
+            return False
+
+        return (
+            self.move_directions[side_name] != 0
+            or self.local_hold_timers[side_name] > 0.0
+        )
+
+    def _reset_local_input(self) -> None:
+        for side_name in ("left", "right"):
+            self.move_directions[side_name] = 0
+            self.local_hold_timers[side_name] = 0.0
+            self.paddle_send_timers[side_name] = 0.0
+
+    def _preview_restart(self) -> None:
+        if self.state is None:
+            return
+
+        self._reset_local_input()
+        players = self.state["players"]
+        self.state = {
+            "round": self.state.get("round", 0) + 1,
+            "players": list(players),
+            "paddles": {
+                players[0]: 0.5,
+                players[1]: 0.5,
+            },
+            "ball": {
+                "x": 0.5,
+                "y": 0.5,
+                "vx": 0.0,
+                "vy": 0.0,
+            },
+            "score": {
+                players[0]: 0,
+                players[1]: 0,
+            },
+            "winner": None,
+        }
+        self.display_state = self._copy_state(self.state)
+        self._sync_local_paddles()
+
+    @staticmethod
+    def _copy_state(state: dict) -> dict:
+        return {
+            "players": list(state["players"]),
+            "paddles": state["paddles"].copy(),
+            "ball": state["ball"].copy(),
+            "score": state["score"].copy(),
+            "winner": state.get("winner"),
+        }
+
+    @staticmethod
+    def _lerp(start: float, end: float, amount: float) -> float:
+        return start + (end - start) * amount
+
+    def _side_nick(self, side_name: str) -> str | None:
+        state = self.state or self.display_state
+        if not state:
+            return None
+
+        players = state["players"]
+        if side_name == "left" and len(players) > 0:
+            return players[0]
+        if side_name == "right" and len(players) > 1:
+            return players[1]
+        return None
+
+    def _nick_side(self, nick: str) -> str | None:
+        state = self.state or self.display_state
+        if not state:
+            return None
+
+        players = state["players"]
+        if len(players) > 0 and nick == players[0]:
+            return "left"
+        if len(players) > 1 and nick == players[1]:
+            return "right"
+        return None
 
     def _draw_game_shell(self) -> None:
         width = self.window.width
@@ -317,18 +542,20 @@ class PongView(NeonBaseView):
         )
 
     def _paddles(self) -> tuple[float, float]:
-        if not self.state:
+        state = self.display_state or self.state
+        if not state:
             return 0.5, 0.5
 
-        players = self.state["players"]
-        paddles = self.state["paddles"]
+        players = state["players"]
+        paddles = state["paddles"]
         return paddles[players[0]], paddles[players[1]]
 
     def _ball(self) -> tuple[float, float]:
-        if not self.state:
+        state = self.display_state or self.state
+        if not state:
             return 0.5, 0.5
 
-        ball = self.state["ball"]
+        ball = state["ball"]
         return ball["x"], ball["y"]
 
     def _score_text(self) -> str:
@@ -354,6 +581,10 @@ class PongView(NeonBaseView):
 
         if self.status == "leave":
             return tr("pong.leave")
+
+        winner = self.state.get("winner") if self.state is not None else None
+        if winner is not None:
+            return tr("pong.finished", winner=winner)
 
         if self.state is None:
             return tr("pong.waiting")
